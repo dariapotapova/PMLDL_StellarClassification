@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "dataset": {
+    "seed": 42,
+    "raw_sha256": "faefcad9b950309282024dd351289ee14ae30f65a7b2ef32c9fa442da9dbe585",
+    "train_sha256": "f0659a57c02afc18d7860c886233a30719b43d5cdc28615307b0161a4c665d21",
+    "val_sha256": "aa84702f24b2cf1b72f54aaac489a2090748dce064737f7a5d3a0abf5c855c6d",
+    "test_sha256": "33a4c0a9a103b9ced0804103bd45bb02a1bf72d24487d785ad1ad376dd9a80a0"
+  },
+  "validation_metrics": {
+    "Logistic Regression": {"balanced_accuracy": 0.9476993243584669, "macro_f1": 0.9344956819867626, "accuracy": 0.9409333333333333},
+    "Random Forest": {"balanced_accuracy": 0.9697020845241635, "macro_f1": 0.9732969664359739, "accuracy": 0.9770666666666666},
+    "CatBoost": {"balanced_accuracy": 0.9723533081902743, "macro_f1": 0.9685890288006633, "accuracy": 0.9723333333333334},
+    "Tabular ResNet": {"balanced_accuracy": 0.9693998067762958, "macro_f1": 0.9690497755767767, "accuracy": 0.9728666666666667},
+    "Tuned Tabular ResNet": {"balanced_accuracy": 0.9694004392953532, "macro_f1": 0.970455132888703, "accuracy": 0.9742}
+  },
+  "checkpoints": {
+    "models/tabular_resnet.pt": "163bb85d55318bf573fb547f8c11285a706a0b87f8edf01386ee949020f65cea",
+    "models/tabular_resnet_tuned.pt": "0cc38674b28fcf81ed1d640b932dc89f77a797884cc8c2154a5b8e72e5ebe5fa"
+  },
+  "absolute_tolerance": 1e-12
+}

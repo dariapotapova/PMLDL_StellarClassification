@@ -1,0 +1,48 @@
+# Local editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Python caches and environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Prepared and raw datasets are generated inputs, not source files.
+data/*.csv
+!data/README.md
+
+# Local model/runtime outputs
+catboost_info/
+*.cbm
+*.joblib
+*.pkl
+
+# Neural-network checkpoints
+*.pt
+*.pth
+*.ckpt
+!models/tabular_resnet.pt
+!models/tabular_resnet_tuned.pt
+
+# Training logs
+*.log
+nohup.out
+
+# Experiment/training artifacts
+runs/
+
+# Canonical run outputs
+reproduction_outputs/
+
+# Secrets and credentials
+.env
+*.pem
+kaggle.json
+project.zip

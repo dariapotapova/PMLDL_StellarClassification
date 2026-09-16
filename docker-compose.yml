@@ -1,0 +1,11 @@
+# References: https://docs.docker.com/compose/compose-file/
+services:
+  reproduce:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      PYTHONHASHSEED: "42"
+    volumes:
+      - ./reproduction_outputs:/app/reproduction_outputs

@@ -1,0 +1,13 @@
+.git
+.venv
+.pytest_cache
+__pycache__
+*.py[cod]
+.DS_Store
+.idea
+.vscode
+*.log
+best_model.pt
+models/hybrid_ft_transformer.pt
+data/*.csv
+reproduction_outputs
