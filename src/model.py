@@ -226,10 +226,12 @@ class TabularResidualBlock(nn.Module):
         hidden_dim: int = 256,
         block_hidden_dim: int = 512,
         dropout: float = 0.1,
+        use_layer_norm: bool = False,
     ) -> None:
         super().__init__()
+        norm_layer = nn.LayerNorm(hidden_dim) if use_layer_norm else nn.BatchNorm1d(hidden_dim)
         self.block = nn.Sequential(
-            nn.BatchNorm1d(hidden_dim),
+            norm_layer,
             nn.Linear(hidden_dim, block_hidden_dim),
             nn.GELU(),
             nn.Dropout(dropout),
@@ -253,6 +255,7 @@ class TabularResNetClassifier(nn.Module):
         block_hidden_dim: int = 512,
         num_blocks: int = 4,
         dropout: float = 0.1,
+        use_layer_norm: bool = False,
     ) -> None:
         super().__init__()
         if num_features <= 0:
@@ -272,12 +275,13 @@ class TabularResNetClassifier(nn.Module):
         self.input_projection = nn.Linear(num_features, hidden_dim)
         self.residual_blocks = nn.Sequential(
             *[
-                TabularResidualBlock(hidden_dim, block_hidden_dim, dropout)
+                TabularResidualBlock(hidden_dim, block_hidden_dim, dropout, use_layer_norm)
                 for _ in range(num_blocks)
             ]
         )
+        head_norm = nn.LayerNorm(hidden_dim) if use_layer_norm else nn.BatchNorm1d(hidden_dim)
         self.head = nn.Sequential(
-            nn.BatchNorm1d(hidden_dim),
+            head_norm,
             nn.GELU(),
             nn.Linear(hidden_dim, num_classes),
         )

@@ -23,26 +23,32 @@ from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score
 from sklearn.preprocessing import StandardScaler
 
 from src.model import TabularResNetClassifier
-from src.prepare_data import sha256
+from src.prepare_data import clean_sentinel_values, sha256
 from src.reproducibility import configure_determinism
 
 
-def neural_metrics(root: Path, checkpoint: str, dropout: float) -> dict[str, float]:
+def neural_metrics(root: Path, checkpoint: str, dropout: float, use_layer_norm: bool = False) -> dict[str, float]:
     """Evaluate a saved Tabular ResNet checkpoint on the fixed validation split."""
 
     train = pd.read_csv(root / "data/train.csv")
     val = pd.read_csv(root / "data/val.csv")
     target_columns = ["class", "class_encoded"]
+    X_train = clean_sentinel_values(train.drop(columns=target_columns))
+    X_val = clean_sentinel_values(val.drop(columns=target_columns))
     imputer = SimpleImputer(strategy="median")
     scaler = StandardScaler()
-    train_values = imputer.fit_transform(train.drop(columns=target_columns))
+    train_values = imputer.fit_transform(X_train)
     scaler.fit(train_values)
-    val_values = scaler.transform(imputer.transform(val.drop(columns=target_columns)))
+    val_values = scaler.transform(imputer.transform(X_val))
 
-    model = TabularResNetClassifier(dropout=dropout)
-    model.load_state_dict(
-        torch.load(root / checkpoint, map_location="cpu", weights_only=True)
-    )
+    model = TabularResNetClassifier(dropout=dropout, use_layer_norm=use_layer_norm)
+    state = torch.load(root / checkpoint, map_location="cpu")
+    if isinstance(state, dict):
+        for key in ("model_state_dict", "state_dict", "model"):
+            if key in state:
+                state = state[key]
+                break
+    model.load_state_dict(state)
     model.eval()
     batches = []
     with torch.no_grad():

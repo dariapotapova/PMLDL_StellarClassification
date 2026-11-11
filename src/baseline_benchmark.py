@@ -52,6 +52,7 @@ from sklearn.metrics import (
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+from src.prepare_data import clean_sentinel_values
 from src.reproducibility import PROJECT_SEED
 
 RANDOM_STATE = PROJECT_SEED
@@ -283,6 +284,9 @@ def prepare_features(train: pd.DataFrame, val: pd.DataFrame) -> tuple[
     target_columns = [TARGET_CLASS, TARGET_ENCODED]
     X_train = train.drop(columns=target_columns).copy()
     X_val = val.drop(columns=target_columns).copy()
+
+    X_train = clean_sentinel_values(X_train)
+    X_val = clean_sentinel_values(X_val)
 
     leaked = [
         column

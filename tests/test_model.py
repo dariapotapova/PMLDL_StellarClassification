@@ -231,3 +231,51 @@ def test_tabular_resnet_eval_mode_is_deterministic() -> None:
         second_logits = model(inputs)
 
     assert torch.equal(first_logits, second_logits)
+
+
+def test_layernorm_switch_controls_normalization_modules() -> None:
+    torch.manual_seed(42)
+    bn_model = TabularResNetClassifier(use_layer_norm=False)
+    torch.manual_seed(42)
+    ln_model = TabularResNetClassifier(use_layer_norm=True)
+
+    bn_count = sum(
+        1 for m in bn_model.modules() if isinstance(m, torch.nn.BatchNorm1d)
+    )
+    ln_count_in_bn = sum(
+        1 for m in bn_model.modules() if isinstance(m, torch.nn.LayerNorm)
+    )
+    ln_count = sum(
+        1 for m in ln_model.modules() if isinstance(m, torch.nn.LayerNorm)
+    )
+    bn_count_in_ln = sum(
+        1 for m in ln_model.modules() if isinstance(m, torch.nn.BatchNorm1d)
+    )
+
+    assert bn_count >= 5
+    assert ln_count_in_bn == 0
+    assert ln_count >= 5
+    assert bn_count_in_ln == 0
+
+    batch = torch.randn(8, 14)
+    bn_logits = bn_model(batch)
+    ln_logits = ln_model(batch)
+    assert bn_logits.shape == (8, 3)
+    assert ln_logits.shape == (8, 3)
+    assert torch.isfinite(bn_logits).all()
+    assert torch.isfinite(ln_logits).all()
+
+
+def test_layernorm_switch() -> None:
+    import torch.nn as nn
+    from src.model import TabularResNetClassifier
+    bn_model = TabularResNetClassifier(use_layer_norm=False)
+    ln_model = TabularResNetClassifier(use_layer_norm=True)
+    bn_count = sum(1 for m in bn_model.modules() if isinstance(m, nn.BatchNorm1d))
+    ln_count = sum(1 for m in ln_model.modules() if isinstance(m, nn.LayerNorm))
+    assert bn_count >= 5
+    assert ln_count >= 5
+    assert not any(isinstance(m, nn.BatchNorm1d) for m in ln_model.modules())
+    inputs = torch.randn(3, 14)
+    assert bn_model(inputs).shape == (3, 3)
+    assert ln_model(inputs).shape == (3, 3)

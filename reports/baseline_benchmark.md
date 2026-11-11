@@ -126,6 +126,8 @@ CatBoost is selected as the current benchmark because it achieves the highest va
 
 The feature-distribution figure uses visualization-only clipping at the train-set 0.5th and 99.5th percentiles. The original feature values are preserved for model training. Extreme values exist in some engineered color features, including ranges around `-10017`, and their physical or preprocessing origin should be investigated in future data-quality work.
 
+**Caveat added after review (W1/W3 fix):** StandardScaler-based linear models and BatchNorm-based neural networks are disproportionately affected by sentinel values such as `-9999` compared to tree-based models (CatBoost, Random Forest). Tree models do not depend on feature scale, make splits on quantiles/percentiles rather than standardized moments, and are naturally robust to a handful of single extreme rows. Consequently, the pre-sentinel-cleaning neural baseline (trained before the review) understates achievable neural performance and was not on an equal preprocessing footing with the tree baselines. All neural training runs in the corrected workflow apply `clean_sentinel_values()` *before* imputation and scaling, which restores equal footing. See also `reports/corrections.md`.
+
 Future custom models must be trained on the same prepared features, selected on validation balanced accuracy, checked against macro F1 and per-class metrics, and compared against the best baseline above before any final one-time test-set evaluation.
 
 ## Reproducibility

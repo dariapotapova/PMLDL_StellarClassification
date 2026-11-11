@@ -65,6 +65,27 @@ COLOUR_FEATURES = {
     "u_r": ("u", "r"),
     "g_i": ("g", "i"),
 }
+SENTINEL_VALUE = -9999
+SENTINEL_COLUMNS = ["u", "g", "z", "u_g", "g_r", "r_i", "i_z", "u_r", "g_i"]
+
+
+def clean_sentinel_values(df: pd.DataFrame) -> pd.DataFrame:
+    """Replace the SDSS missing-value sentinel -9999 with NaN in raw and derived bands.
+
+    Operates on a copy; the input frame is never mutated in place. Only the
+    columns listed in :data:`SENTINEL_COLUMNS` are inspected; any other
+    column (including ``redshift``, identifier metadata, or the target) is
+    passed through untouched. A value of exactly zero in a derived colour
+    (e.g. ``r_i == 0`` when both bands are identical on the same object)
+    is **not** treated as a sentinel, which distinguishes a real
+    measurement from the ``-9999 - (-9999) = 0`` artefact-free case.
+    """
+
+    result = df.copy()
+    for column in SENTINEL_COLUMNS:
+        if column in result.columns:
+            result.loc[result[column] == SENTINEL_VALUE, column] = pd.NA
+    return result
 
 
 def sha256(path: Path) -> str:

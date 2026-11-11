@@ -53,16 +53,32 @@ from src.baseline_benchmark import (
     resolve_paths,
 )
 from src.model import TabularResNetClassifier
+from src.prepare_data import clean_sentinel_values
 
 RESNET_RUNS = {
-    "Tabular ResNet (untuned)": ("tabular_resnet.pt", "proposed"),
-    "Tabular ResNet (tuned)": ("tabular_resnet_tuned.pt", "improved"),
+    "Tabular ResNet (initial/LN baseline)": (
+        "tabular_resnet.pt", "proposed", {"use_layer_norm": True, "dropout": 0.10},
+    ),
+    "Tabular ResNet (ablation/BN control)": (
+        "tabular_resnet_ablation_norm.pt", "ablation", {"use_layer_norm": False, "dropout": 0.10},
+    ),
+    "Tabular ResNet (tuned/LN improved)": (
+        "tabular_resnet_tuned.pt", "improved", {"use_layer_norm": True, "dropout": 0.05},
+    ),
 }
 
 
-def resnet_predict(checkpoint: Path, X_scaled: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Load a saved Tabular ResNet checkpoint and predict class labels/probabilities."""
-    model = TabularResNetClassifier()  # defaults match the trained architecture
+def resnet_predict(
+    checkpoint: Path, X_scaled: np.ndarray, **model_kwargs: object
+) -> tuple[np.ndarray, np.ndarray]:
+    """Load a saved Tabular ResNet checkpoint and predict class labels/probabilities.
+
+    All keyword arguments are forwarded to ``TabularResNetClassifier`` so that
+    LayerNorm / BatchNorm variants, different dropout values, or other
+    constructor options can be matched to the checkpoint that was saved with
+    those settings.
+    """
+    model = TabularResNetClassifier(**model_kwargs)
     state = torch.load(checkpoint, map_location="cpu")
     if isinstance(state, dict):
         for key in ("model_state_dict", "state_dict", "model"):
@@ -154,6 +170,7 @@ def main() -> None:
     # prepare_features for validation checks; test.csv is read exactly once below.
     train, val, _ = load_data(paths.data_dir)
     X_train, y_train, _, _, feature_columns, _, _ = prepare_features(train, val)
+    X_train = clean_sentinel_values(X_train)
 
     test_path = paths.data_dir / "test.csv"
     test = pd.read_csv(test_path)  # <-- the single load of the test split
@@ -163,6 +180,7 @@ def main() -> None:
     if missing:
         raise ValueError(f"test.csv is missing required columns: {missing}")
     X_test = test[feature_columns].copy()
+    X_test = clean_sentinel_values(X_test)
     y_test = test[TARGET_ENCODED].copy()
     print(f"Test split loaded once: {len(y_test)} rows.")
 
@@ -191,11 +209,12 @@ def main() -> None:
     per_class_frames = [
         calculate_per_class_metrics(y_test, r.y_pred, r.name) for r in baseline_results
     ]
-    for display_name, (filename, kind) in RESNET_RUNS.items():
+    for display_name, (filename, kind, model_kwargs) in RESNET_RUNS.items():
         checkpoint = paths.repo_root / "models" / filename
         if not checkpoint.exists():
-            raise FileNotFoundError(f"Missing checkpoint: {checkpoint}")
-        y_pred, proba = resnet_predict(checkpoint, X_test_scaled)
+            print(f"[warn] Skipping {display_name}: checkpoint not found at {checkpoint}")
+            continue
+        y_pred, proba = resnet_predict(checkpoint, X_test_scaled, **model_kwargs)
         row = evaluate_model(y_test, y_pred, display_name)
         row["ROC-AUC (OvR macro)"] = roc_auc_score(
             y_test, proba, multi_class="ovr", average="macro", labels=LABEL_ORDER)

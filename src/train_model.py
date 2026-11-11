@@ -54,6 +54,7 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from src.model import TabularResNetClassifier
+from src.prepare_data import clean_sentinel_values
 from src.reproducibility import PROJECT_SEED, configure_determinism, seed_worker
 
 
@@ -79,6 +80,7 @@ class TrainingConfig:
     early_stopping_patience: int | None = 100
     min_delta: float = 1e-4
     use_scheduler: bool = True
+    use_layer_norm: bool = True
 
 
 INITIAL_CONFIG = TrainingConfig(
@@ -90,8 +92,30 @@ INITIAL_CONFIG = TrainingConfig(
     early_stopping_patience=None,
     min_delta=0.0,
     use_scheduler=False,
+    use_layer_norm=True,
 )
-TUNED_CONFIG = TrainingConfig()
+ABLATION_NORM_CONFIG = TrainingConfig(
+    experiment="ablation_norm",
+    epochs=30,
+    learning_rate=1e-3,
+    dropout=0.10,
+    gradient_clip_norm=None,
+    early_stopping_patience=None,
+    min_delta=0.0,
+    use_scheduler=False,
+    use_layer_norm=False,
+)
+TUNED_CONFIG = TrainingConfig(
+    experiment="tuned",
+    epochs=45,
+    learning_rate=7e-4,
+    dropout=0.05,
+    gradient_clip_norm=1.0,
+    early_stopping_patience=10,
+    min_delta=1e-4,
+    use_scheduler=True,
+    use_layer_norm=True,
+)
 CONFIG = TUNED_CONFIG
 
 TARGET_COLUMNS = ["class", "class_encoded"]
@@ -161,12 +185,22 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--experiment",
-        choices=("initial", "tuned"),
+        choices=("initial", "ablation_norm", "tuned"),
         default="tuned",
-        help="Train the historical initial configuration or the tuned configuration.",
+        help=(
+            "Train one of three configurations: "
+            "initial (LayerNorm baseline), ablation_norm (BatchNorm single-factor "
+            "control that differs from initial ONLY in normalization), or "
+            "tuned (LayerNorm + schedule/dropout/clipping improvements)."
+        ),
     )
     args = parser.parse_args()
-    config = INITIAL_CONFIG if args.experiment == "initial" else TUNED_CONFIG
+    if args.experiment == "initial":
+        config = INITIAL_CONFIG
+    elif args.experiment == "ablation_norm":
+        config = ABLATION_NORM_CONFIG
+    else:
+        config = TUNED_CONFIG
     generator = configure_determinism(RANDOM_STATE)
 
     project_root = Path(__file__).resolve().parents[1]
@@ -176,9 +210,11 @@ def main() -> None:
 
     # Separate features and targets.
     X_train = train.drop(columns=TARGET_COLUMNS)
+    X_train = clean_sentinel_values(X_train)
     y_train = train["class_encoded"]
 
     X_val = val.drop(columns=TARGET_COLUMNS)
+    X_val = clean_sentinel_values(X_val)
     y_val = val["class_encoded"]
 
     if list(X_train.columns) != list(X_val.columns):
@@ -235,6 +271,7 @@ def main() -> None:
         block_hidden_dim=config.block_hidden_dim,
         num_blocks=config.num_blocks,
         dropout=config.dropout,
+        use_layer_norm=config.use_layer_norm,
     ).to(device)
 
     criterion = nn.CrossEntropyLoss()
@@ -261,7 +298,12 @@ def main() -> None:
     best_val_loss = 0.0
     models_dir = project_root / "models"
     models_dir.mkdir(parents=True, exist_ok=True)
-    file_prefix = "tabular_resnet_tuned" if config.experiment == "tuned" else "tabular_resnet"
+    prefix_map = {
+        "initial": "tabular_resnet",
+        "ablation_norm": "tabular_resnet_ablation_norm",
+        "tuned": "tabular_resnet_tuned",
+    }
+    file_prefix = prefix_map[config.experiment]
     best_path = models_dir / f"{file_prefix}.pt"
     training_reports_dir = project_root / "reports" / "training"
     training_reports_dir.mkdir(parents=True, exist_ok=True)
@@ -384,11 +426,33 @@ def main() -> None:
     saved_history = save_training_history(history_records, history_path)
     save_training_plots(saved_history, figures_dir, file_prefix=file_prefix)
 
+    if config.experiment == "tuned":
+        initial_history_path = training_reports_dir / "tabular_resnet_history.csv"
+        ablation_history_path = training_reports_dir / "tabular_resnet_ablation_norm_history.csv"
+        initial_best = None
+        ablation_best = None
+        if initial_history_path.exists():
+            initial_df = pd.read_csv(initial_history_path)
+            initial_best = float(initial_df["balanced_accuracy"].max())
+            print()
+            print(f"Initial config best BA = {initial_best:.6f}")
+            print(f"  -> Tuned delta (tuned - initial) = "
+                  f"{best_balanced_accuracy - initial_best:+.6f} BA")
+        if ablation_history_path.exists():
+            ablation_df = pd.read_csv(ablation_history_path)
+            ablation_best = float(ablation_df["balanced_accuracy"].max())
+            print(f"Ablation (BN-only) best BA = {ablation_best:.6f}")
+            print(f"  -> LayerNorm effect (initial - ablation) = "
+                  f"{(initial_best if initial_best is not None else float('nan')) - ablation_best:+.6f} BA "
+                  f"(single-factor normalization ablation)")
+
     print()
     print("Model: TabularResNetClassifier")
+    print(f"Experiment: {config.experiment}")
+    print(f"Normalization: {'LayerNorm' if config.use_layer_norm else 'BatchNorm1d (ablation control)'}")
     print(f"Best epoch: {best_epoch}")
-    print(f"Best validation balanced accuracy: {best_balanced_accuracy:.4f}")
-    print(f"Best validation macro F1: {best_macro_f1:.4f}")
+    print(f"Best validation balanced accuracy: {best_balanced_accuracy:.6f}")
+    print(f"Best validation macro F1: {best_macro_f1:.6f}")
     print(f"Best validation loss: {best_val_loss:.4f}")
     print(f"Model saved to: {best_path.relative_to(project_root)}")
     print(f"Training history saved to: {history_path.relative_to(project_root)}")
